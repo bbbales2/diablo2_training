@@ -31,14 +31,18 @@ for i, filename in enumerate(logs):
             if line.strip() == '':
                 continue
 
-            time, state, action = json.loads(line)
+            try:
+                time, state, action = json.loads(line)
+            except Exception as e:
+                print "Error with: ", line
+                continue
 
             if state is None or (state['x'] == 0 and state['y'] == 0):
                 continue
 
             x = numpy.zeros((1, 8))
             x[0, action] = 1
-            reward = state["lastUnitClicked"] * 5.0
+            reward = state["lastUnitClicked"] * (state["lastUnitTypeClicked"] == 1) * 5.0
 
             xs_.append(x)
             rewards_.append(reward)
