@@ -10,7 +10,9 @@ import keras
 
 parser = argparse.ArgumentParser(description='Train neural network for diablo2')
 parser.add_argument('training', type = str, default = None, help = 'hdf5 file with training data')
+parser.add_argument('--rewards', type = str, default = None, help = 'Optional hdf5 file with separate rewards')
 parser.add_argument('--input', type = str, default = None, help = 'Input model to continue training')
+parser.add_argument('--fineTune', type = int, default = -1, help = 'Number of layers back from the end to fine tune. -1 means train all layers')
 parser.add_argument('--output', type = str, default = None, help = 'Output model name. By default don\'t save models')
 parser.add_argument('--epochs', type = int, default = 1000, help = 'Number of training epochs')
 parser.add_argument('--batchsize', type = int, default = 100, help = 'Size of batches')
@@ -31,9 +33,19 @@ if args.training is None:
 with h5py.File(args.training, 'r') as f:
     Xshape = f['X'].shape
     framesShape = f['frames'].shape
+    rewards_ = f['rewards'][:].flatten()
+
+if args.rewards:
+    with h5py.File(args.rewards, 'r') as f:
+        rewards_ = f['rewards'][:].flatten()
     
 if args.input is not None:
     model = keras.models.load_model(args.input)
+
+    if args.fineTune > 0:
+        L = len(model.layers)
+        for i in range(L - args.fineTune):
+            model.layers[i].trainable = False
 else:
     from keras.models import Sequential, Model
     from keras.layers import Dense, Activation, Conv2D, MaxPooling2D, Dropout, Flatten, Input, Concatenate, AveragePooling2D
@@ -86,8 +98,10 @@ else:
     out = Dense(1)(dense4)
     model = Model(inputs = [inp1, inp2], outputs = out)
     
-    model.compile(optimizer = 'adam',#Adam(lr = 0.01),
-                  loss = 'mse')#losses.mean_absolute_error)#
+model.compile(optimizer = 'adam',#Adam(lr = 0.01),
+              loss = 'mse')#losses.mean_absolute_error)#
+
+model.summary()
     
 def generator(filename, batchsize):
     with h5py.File(filename, 'r') as f:
@@ -102,7 +116,7 @@ def generator(filename, batchsize):
             
             X = f['X'][i : ir].reshape(-1, 8)
             frames = f['frames'][i : ir, :, :, :]
-            rewards = f['rewards'][i : ir].flatten()
+            rewards = rewards_[i : ir]#f['rewards'][i : ir].flatten()
 
             i = i + batchsize
 
@@ -117,9 +131,9 @@ def generator(filename, batchsize):
 
 #frames = frames[:, 
 with h5py.File(args.training, 'r') as f:
-    X = f['X'][:5000].reshape(-1, 8)
-    frames = f['frames'][:5000, :, :, :]
-    rewards = f['rewards'][:5000]
+    X = f['X'][:2000].reshape(-1, 8)
+    frames = f['frames'][:2000, :, :, :]
+    rewards = rewards_[:2000]#f['rewards'][:2000]
 
 open("{0}/loss".format(args.outputFolder), "w").close()
 
