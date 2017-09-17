@@ -152,7 +152,7 @@ for i in range((args.epochs + args.checkpoint - 1) / args.checkpoint):
                         epochs = epochs,
                         callbacks = [history])
     prewards = model.predict([frames, X])
-    plt.plot(prewards, rewards, '*')
+    plt.plot(prewards, rewards + numpy.random.randn(len(rewards)) * 0.1, '.', alpha = 0.1)
     plt.plot(rewards, rewards, 'r')
     plt.savefig('{0}/plot{1}.png'.format(args.outputFolder, i))
     plt.clf()
