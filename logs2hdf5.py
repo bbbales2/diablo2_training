@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description='Read in logfile output and produce
 
 parser.add_argument('logFolder', type = str, help = 'Folder with all the log files')
 parser.add_argument('output', type = str, help = 'HDF5 file to save ready to train data in')
+parser.add_argument('-N', type = int, default = -1, help = 'Number of samples to copy. If -1, use all')
 
 args = parser.parse_args()
 
@@ -40,8 +41,12 @@ for i, filename in enumerate(logs):
             if state is None or (state['x'] == 0 and state['y'] == 0):
                 continue
 
-            x = numpy.zeros((1, 8))
-            x[0, action] = 1
+            x = [0] * 8
+            try:
+                x[action] = 1
+            except:
+                print "Error with: ", line
+                continue
             reward = state["lastUnitClicked"] * (state["lastUnitTypeClicked"] == 1) * 5.0
 
             xs_.append(x)
@@ -53,6 +58,13 @@ for i, filename in enumerate(logs):
 
 rewards = numpy.array(rewards)
 xs = numpy.array(xs)
+
+print "{0} out of {1} clicks hit".format(sum(rewards > 0), len(rewards))
+
+if args.N != -1:
+    rewards = rewards[:args.N]
+    xs = xs[:args.N]
+    frames = frames[:args.N]
 
 with h5py.File(args.output, "w") as f:
     f.create_dataset("X", data = xs)
