@@ -67,9 +67,12 @@ for i, filename in enumerate(logs):
                 lastXp = xp
                 maxHp = hp
 
-            reward = 4.0 * max(0.0, hp - lastHp) + (xp - lastXp) / 10.0
+            reward = state["lastUnitClicked"] * (state["lastUnitTypeClicked"] == 1) * 5.0
+            #reward = min(30.0, 0.0 * max(0.0, hp - lastHp) + (xp - lastXp) / 10.0)
             #if reward > 0.0:
             #    print (hp - lastHp) * 4.0, (xp - lastXp) / 10.0
+            #if (xp - lastXp) > 0:
+            #    print state["lastUnitClicked"], xp - lastXp
             
             lastHp = hp
             lastXp = xp
@@ -86,7 +89,6 @@ for i, filename in enumerate(logs):
         clicks.extend(clicks_[:-1])
         layers.extend(layers_[:-1])
 
-        
 rewards = numpy.array(rewards)
 clickHistories = numpy.array(clickHistories)
 missingHp = numpy.array(missingHp)
@@ -101,6 +103,11 @@ if args.N != -1:
     missingHp = missingHp[:args.N]
     clicks = clicks[:args.N]
     layers = layers[:args.N]
+
+#N = len(rewards)
+#for i in range(N):
+#    for j in range(i + 1, min(i + 15, N)):
+#        rewards[i] += rewards[j] * 0.75**(j - i)
 
 with h5py.File(args.output, "w") as f:
     f.create_dataset("clickHistories", data = clickHistories)
