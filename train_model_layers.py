@@ -50,30 +50,51 @@ if args.input is not None:
             model.layers[i].trainable = False
 else:
     from keras.models import Sequential, Model
-    from keras.layers import Dense, Activation, Conv2D, MaxPooling2D, Dropout, Flatten, Reshape, Input, Concatenate, AveragePooling2D
+    from keras.layers import Dense, Activation, Conv2D, MaxPooling2D, Dropout, Flatten, Reshape, Input, Concatenate, AveragePooling2D, LSTM, GRU
     from keras import regularizers, losses
     from keras.optimizers import Adam, Adagrad, Adadelta
 
-    if args.network == 'layer_v1':
-        inp_layer = Input(shape = layers[0].shape)
-        denseCnn = Dense(128, activation='relu')(inp_layer)
-        drop_layer = Dropout(0.5)(denseCnn)
+    #model = Sequential()
+    #model.add(GRU(128, return_sequences=True, input_shape=(5, layers[0].shape[0] + clicks[0].shape[0])))
+    #model.add(GRU(64, return_sequences=True))
+    #model.add(GRU(32))
+    #model.add(Dense(1))
 
-    inp_click_history = Input(shape = clickHistories[0].shape)
-    flatten_click_history = Flatten()(inp_click_history)
-    dense_click_history1 = Dense(15, activation = 'relu')(flatten_click_history)
-    dense_click_history2 = Dense(8, activation = 'relu')(dense_click_history1)
+    inp_layer = Input(shape = (1, layers[0].shape[0]))
+    click_layer = Input(shape = (1, clicks[0].shape[0]))
+    dense1 = Dense(128, activation = 'relu')(Flatten()(inp_layer))
+    drop_layer = Dropout(0.5)(dense1)
+    dense_click = Dense(15, activation = 'relu')(Flatten()(click_layer))
+    concat = Concatenate()([drop_layer, dense_click])
+    dense3 = Dense(32, activation = 'relu')(concat)
+    dense4 = Dense(16, activation = 'relu')(dense3)
+    #gru1 = GRU(64, return_sequences=True)(concat)
+    #gru2 = GRU(32, return_sequences=True)(gru1)
+    #gru3 = GRU(8)(gru2)
+    out = Dense(1, activation = 'relu')(dense4)
+    
+    model = Model(inputs = [inp_layer, click_layer], outputs = out)
 
-    inp_hp = Input(shape = (1,))
-    dense_hp = Dense(4, activation = 'relu')(inp_hp)
+    #if args.network == 'layer_v1':
+    #    inp_layer = Input(shape = layers[0].shape)
+    #    denseCnn = Dense(128, activation='relu')(inp_layer)
+    #    drop_layer = Dropout(0.5)(denseCnn)
 
-    inp_clicks = Input(shape = clicks[0].shape)
-    dense_clicks = Dense(15, activation = 'relu')(inp_clicks)
-    concat = Concatenate()([drop_layer, dense_clicks, dense_hp, dense_click_history2])
-    dense4 = Dense(32, activation = 'relu')(concat)
-    dense5 = Dense(16, activation = 'relu')(dense4)
-    out = Dense(1)(dense4)
-    model = Model(inputs = [inp_layer, inp_click_history, inp_clicks, inp_hp], outputs = out)
+    #inp_click_history = Input(shape = clickHistories[0].shape)
+    #flatten_click_history = Flatten()(inp_click_history)
+    #dense_click_history1 = Dense(15, activation = 'relu')(flatten_click_history)
+    #dense_click_history2 = Dense(8, activation = 'relu')(dense_click_history1)
+
+    #inp_hp = Input(shape = (1,))
+    #dense_hp = Dense(4, activation = 'relu')(inp_hp)
+
+    #inp_clicks = Input(shape = clicks[0].shape)
+    #dense_clicks = Dense(15, activation = 'relu')(inp_clicks)
+    #concat = Concatenate()([drop_layer, dense_clicks, dense_hp, dense_click_history2])
+    #dense4 = Dense(32, activation = 'relu')(concat)
+    #dense5 = Dense(16, activation = 'relu')(dense4)
+    #out = Dense(1)(dense4)
+    #model = Model(inputs = [inp_layer, inp_click_history, inp_clicks, inp_hp], outputs = out)
     
 model.compile(optimizer = Adadelta(),#m(lr = 0.01),#'adam',
               loss = 'mse')
@@ -89,17 +110,25 @@ class LossHistory(keras.callbacks.Callback):
 
 history = LossHistory()
 
+T = 1
+X = numpy.concatenate([layers, clicks], axis = 1)
+X_ = numpy.zeros((X.shape[0], T, X.shape[1]))
+for i in range(T, X_.shape[0]):
+    for j in range(T):
+        X_[i, j, :] = X[i - T + j + 1, :]
+X_ = X_[T:]
+
 for i in range((args.epochs + args.checkpoint - 1) / args.checkpoint):
     epochs = min(args.epochs - i * args.checkpoint, args.checkpoint)
     print "Checkpoint {0}, epochs {1} to {2}".format(i, i * args.checkpoint, min(args.epochs, i * args.checkpoint))
-    
-    model.fit([layers, clickHistories, clicks, missingHp],
-              rewards,
+    print X_.shape
+    model.fit([X_[:, :, :640], X_[:, :, 640:]],#clickHistories, , missingHp
+              rewards[T:],
               batch_size = args.batchsize,
               epochs = epochs,
               callbacks = [history])
-    prewards = model.predict([layers[:5000], clickHistories[:5000], clicks[:5000], missingHp[:5000]])
-    plt.plot(prewards, rewards[:5000] + numpy.random.randn(len(prewards)) * 0.1, '.', alpha = 0.1)
+    prewards = model.predict([X_[:5000, :, :640], X_[:5000, :, 640:]])#,[layers[:5000], clicks[:5000]] missingHp[:5000], clickHistories[:5000]
+    plt.plot(prewards, rewards[T:][:5000] + numpy.random.randn(len(prewards)) * 0.1, '.', alpha = 0.1)
     plt.plot(rewards, rewards, 'r')
     plt.savefig('{0}/plot{1}.png'.format(args.outputFolder, i))
     plt.clf()
